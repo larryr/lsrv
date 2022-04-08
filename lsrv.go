@@ -4,8 +4,6 @@
 // license that can be found in the LICENSE file.
 // code borrowed from:https://go.dev/doc/articles/wiki/final.go
 
-//go:build ignore
-
 package main
 
 import (
