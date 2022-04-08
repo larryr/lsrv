@@ -1,3 +1,4 @@
+// Copyright 2022 Larry Rau. All rights reserved.
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -8,7 +9,9 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -19,14 +22,25 @@ type Page struct {
 	Body  []byte
 }
 
+var validPath *regexp.Regexp
+var templates *template.Template
+
+func init() {
+	setup()
+
+	templates = template.Must(template.ParseFiles("edit.html", "view.html"))
+	validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
+}
+
 func main() {
+
 	http.HandleFunc("/view/", makeHandler(viewHandler))
 	http.HandleFunc("/edit/", makeHandler(editHandler))
 	http.HandleFunc("/save/", makeHandler(saveHandler))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "content/"+r.URL.Path[1:])
 	})
-
+	fmt.Printf("lsrv: port=8080\n")
 	log.Fatal(http.ListenAndServe("0.0.0.0:8080", nil))
 }
 
@@ -72,16 +86,12 @@ func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
 	http.Redirect(w, r, "/view/"+title, http.StatusFound)
 }
 
-var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
-
 func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
 	err := templates.ExecuteTemplate(w, tmpl+".html", p)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
-
-var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
 
 func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -91,5 +101,36 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 			return
 		}
 		fn(w, r, m[2])
+	}
+}
+
+var (
+	edit_html string = `
+<h1>Editing {{.Title}}</h1>
+
+<form action="/save/{{.Title}}" method="POST">
+<div><textarea name="body" rows="20" cols="80">{{printf "%s" .Body}}</textarea></div>
+<div><input type="submit" value="Save"></div>
+</form>`
+
+	view_html string = `
+	<h1>{{.Title}}</h1>
+<p>[<a href="/edit/{{.Title}}">edit</a>]</p>
+<div>{{printf "%s" .Body}}</div>
+`
+)
+
+func setup() {
+
+	makeFile("edit.html", edit_html)
+
+	makeFile("view.html", view_html)
+
+}
+
+func makeFile(name, content string) {
+	out, err := os.Create(name)
+	if err == nil {
+		out.WriteString(content)
 	}
 }
